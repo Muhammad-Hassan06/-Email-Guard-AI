@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Email Guard AI | Spam & Phishing Detector</title>
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- Custom Stylesheet -->
+    <link rel="stylesheet" href="style.css">
+    
+    <!-- Chart.js for analytics -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- React 18 & Babel Standalone -->
+    <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body>
+    <div id="root"></div>
+
+    <!-- React Application Component Script (Inlined to allow double-clicking file:// without browser CORS errors) -->
+    <script type="text/babel">
+const { useState, useEffect, useRef } = React;
+
+const API_BASE_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'http://localhost:8000' : 'https://ai-model-backend-t1u5.onrender.com';
+
+function App() {
+    const [activeTab, setActiveTab] = useState('predictor');
+
+    return (
+        <div className="app-layout">
+            <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
+            <main className="main-wrapper">
+                <Header />
+                {activeTab === 'predictor' && <PredictorTab />}
+                {activeTab === 'analytics' && <AnalyticsTab />}
+                {activeTab === 'specs' && <ModelSpecsTab />}
+                {activeTab === 'api' && <ApiTab />}
+            </main>
+        </div>
+    );
+}
+
+// ----------------------------------------------------------------------------
+// Sidebar Component
+// ----------------------------------------------------------------------------
+function Sidebar({ activeTab, setActiveTab }) {
+    return (
+        <aside className="sidebar">
+            <div>
+                <div className="brand-box">
+                    <div className="brand-icon">🛡️</div>
+                    <div>
+                        <h2 className="brand-title">Email Guard AI</h2>
+                        <span className="brand-subtitle">Spam & Phishing Detector</span>
+                    </div>
+                </div>
+
+                <nav className="nav-list">
+                    <button 
+                        className={`nav-btn ${activeTab === 'predictor' ? 'active' : ''}`}
+                        onClick={() => setActiveTab('predictor')}
+                    >
+                        <span>🔮 Spam Classifier</span>
+                    </button>
+
+                    <button 
+                        className={`nav-btn ${activeTab === 'analytics' ? 'active' : ''}`}
+                        onClick={() => setActiveTab('analytics')}
+                    >
+                        <span>📊 Dataset Analytics</span>
+                    </button>
+
+                    <button 
+                        className={`nav-btn ${activeTab === 'specs' ? 'active' : ''}`}
+                        onClick={() => setActiveTab('specs')}
+                    >
+                        <span>🔬 Model Architecture</span>
+                    </button>
+
+                    <button 
+                        className={`nav-btn ${activeTab === 'api' ? 'active' : ''}`}
+                        onClick={() => setActiveTab('api')}
+                    >
+                        <span>🔌 FastAPI Backend Guide</span>
+                    </button>
+                </nav>
+            </div>
+
+            <div style={{ background: 'rgba(15, 23, 42, 0.9)', padding: '14px', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
+                <small style={{ color: 'var(--text-muted)', fontSize: '0.75rem', fontWeight: 600 }}>MODEL PIPELINE</small>
+                <div style={{ fontFamily: 'monospace', color: 'var(--primary)', fontSize: '0.8rem', marginTop: '4px' }}>
+                    spam_ham_model.pkl + tfidf.pkl
+                </div>
+            </div>
+        </aside>
+    );
+}
+
+// ----------------------------------------------------------------------------
+// Top Header Component
+// ----------------------------------------------------------------------------
+function Header() {
+    return (
+        <header className="top-bar">
+            <div>
+                <h1>Email Spam & Phishing Classifier</h1>
+                <p>Natural Language Processing model utilizing TF-IDF Vectorization & Logistic Regression</p>
+            </div>
+            <div className="status-pill">
+                <span className="dot"></span> FastAPI + TF-IDF Model Active
+            </div>
+        </header>
+    );
+}
+
+// ----------------------------------------------------------------------------
+// 1. Predictor Tab (Interactive Form & Live Result)
+// ----------------------------------------------------------------------------
+function PredictorTab() {
+    const [emailText, setEmailText] = useState(
+        "WINNER!! As a valued network customer you have been selected to receive a £900 prize reward! Call 09061701461 to claim your reward."
+    );
+    const [presetActive, setPresetActive] = useState('spam_prize');
+
+    // Prediction & Source Tracking State
+    const [isSpam, setIsSpam] = useState(true);
+    const [label, setLabel] = useState('Spam');
+    const [confidence, setConfidence] = useState(0.985);
+    const [spamProb, setSpamProb] = useState(0.985);
+    const [hamProb, setHamProb] = useState(0.015);
+    const [computationSource, setComputationSource] = useState('FASTAPI'); // 'FASTAPI' | 'LOCAL_DEMO'
+
+    const handlePredict = async () => {
+        if (!emailText.trim()) return;
+
+        try {
+            const res = await fetch(`${API_BASE_URL}/predict/spam`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text: emailText })
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                setIsSpam(data.is_spam);
+                setLabel(data.label);
+                setConfidence(data.confidence);
+                setSpamProb(data.spam_probability);
+                setHamProb(data.ham_probability);
+                setComputationSource('FASTAPI');
+            } else {
+                throw new Error('API Non-200');
+            }
+        } catch (err) {
+            setComputationSource('LOCAL_DEMO');
+            
+            // Client-side heuristic keyword analyzer
+            const lower = emailText.toLowerCase();
+            const spamKeywords = ['win', 'winner', 'prize', 'claim', 'free', 'urgent', 'cash', 'reward', 'call', 'money', 'credit card', 'click here', 'guaranteed', 'account restricted'];
+            let matches = 0;
+            spamKeywords.forEach(kw => {
+                if (lower.includes(kw)) matches++;
+            });
+
+            const estimatedIsSpam = matches >= 2 || lower.includes('winner') || lower.includes('prize') || lower.includes('claim');
+            setIsSpam(estimatedIsSpam);
+            setLabel(estimatedIsSpam ? 'Spam' : 'Ham');
+            
+            const calcProb = Math.min(0.99, 0.55 + matches * 0.12);
+            setConfidence(calcProb);
+            setSpamProb(estimatedIsSpam ? calcProb : 1 - calcProb);
+            setHamProb(estimatedIsSpam ? 1 - calcProb : calcProb);
+        }
+    };
+
+    useEffect(() => {
+        handlePredict();
+    }, []);
+
+    const applyPreset = (type) => {
+        setPresetActive(type);
+        if (type === 'spam_prize') {
+            setEmailText("WINNER!! As a valued network customer you have been selected to receive a £900 prize reward! Call 09061701461 to claim your reward.");
+        } else if (type === 'ham_work') {
+            setEmailText("Hi Alex, Please review the updated Q3 project roadmap slides when you get a chance. We have a sync call scheduled at 3 PM tomorrow.");
+        } else if (type === 'spam_urgent') {
+            setEmailText("URGENT SECURITY ALERT! Your bank account access has been temporarily suspended. Click here immediately to verify your identity and restore access: http://verify-account-security.com");
+        }
+    };
+
+    // Extract detected spam keywords for highlight display
+    const getDetectedKeywords = (text) => {
+        const keywords = ['winner', 'prize', 'claim', 'free', 'urgent', 'cash', 'reward', 'call', 'suspended', 'verify', 'click here', 'money'];
+        const lower = text.toLowerCase();
+        return keywords.filter(kw => lower.includes(kw));
+    };
+
+    const detected = getDetectedKeywords(emailText);
+
+    return (
+        <div className="grid-2">
+            {/* Input Form Panel */}
+            <div className="glass-card">
+                <h3 className="card-title">✉️ Email / Message Content</h3>
+
+                {/* Presets Toolbar */}
+                <div className="preset-bar">
+                    <button 
+                        className={`preset-btn ${presetActive === 'spam_prize' ? 'active' : ''}`}
+                        onClick={() => applyPreset('spam_prize')}
+                    >
+                        🚨 Prize Winner Scam
+                    </button>
+                    <button 
+                        className={`preset-btn ${presetActive === 'ham_work' ? 'active' : ''}`}
+                        onClick={() => applyPreset('ham_work')}
+                    >
+                        💼 Legitimate Work Email
+                    </button>
+                    <button 
+                        className={`preset-btn ${presetActive === 'spam_urgent' ? 'active' : ''}`}
+                        onClick={() => applyPreset('spam_urgent')}
+                    >
+                        🔑 Phishing Security Alert
+                    </button>
+                </div>
+
+                <form onSubmit={(e) => { e.preventDefault(); handlePredict(); }}>
+                    <div className="form-group">
+                        <div className="form-label">
+                            <span>Email Body / Text Message</span>
+                            <span style={{ color: 'var(--text-dim)', fontSize: '0.8rem' }}>{emailText.length} characters</span>
+                        </div>
+                        <textarea 
+                            className="email-textarea"
+                            value={emailText}
+                            onChange={(e) => setEmailText(e.target.value)}
+                            placeholder="Paste email text or SMS message here..."
+                        />
+                    </div>
+
+                    <button type="submit" className="btn-primary">
+                        🔮 Analyze & Detect Spam
+                    </button>
+                </form>
+            </div>
+
+            {/* Output Display Panel */}
+            <div>
+                <div className="glass-card">
+                    <h3 className="card-title">✨ Detection Result</h3>
+
+                    <div className={`result-box ${isSpam ? 'spam' : 'ham'}`}>
+                        {/* EXPLICIT COMPUTATION SOURCE BADGE */}
+                        <div style={{ marginBottom: '14px' }}>
+                            {computationSource === 'FASTAPI' ? (
+                                <span style={{ 
+                                    background: 'rgba(16, 185, 129, 0.2)', 
+                                    color: '#10b981', 
+                                    border: '1px solid rgba(16, 185, 129, 0.4)',
+                                    padding: '6px 14px', 
+                                    borderRadius: '20px', 
+                                    fontSize: '0.82rem', 
+                                    fontWeight: 700 
+                                }}>
+                                    🟢 Computed by Live FastAPI Backend (main.py)
+                                </span>
+                            ) : (
+                                <span style={{ 
+                                    background: 'rgba(245, 158, 11, 0.2)', 
+                                    color: '#f59e0b', 
+                                    border: '1px solid rgba(245, 158, 11, 0.4)',
+                                    padding: '6px 14px', 
+                                    borderRadius: '20px', 
+                                    fontSize: '0.82rem', 
+                                    fontWeight: 700 
+                                }}>
+                                    ⚡ Computed by Local Client-Side Demo Engine
+                                </span>
+                            )}
+                        </div>
+
+                        <div className="result-label">Predicted Message Category</div>
+                        <div className={`result-status ${isSpam ? 'spam' : 'ham'}`}>
+                            {isSpam ? '🚨 SPAM / PHISHING DETECTED' : '✅ LEGITIMATE (HAM) EMAIL'}
+                        </div>
+
+                        <div style={{ fontSize: '1.1rem', fontWeight: 700, margin: '12px 0 6px' }}>
+                            {(confidence * 100).toFixed(1)}% Model Confidence
+                        </div>
+
+                        {/* EXPLICIT COMPUTATION METHOD NOTICE */}
+                        <div style={{ 
+                            marginTop: '16px', 
+                            padding: '10px 14px', 
+                            borderRadius: '10px', 
+                            fontSize: '0.78rem', 
+                            textAlign: 'left',
+                            background: computationSource === 'FASTAPI' ? 'rgba(16, 185, 129, 0.08)' : 'rgba(245, 158, 11, 0.08)',
+                            color: computationSource === 'FASTAPI' ? '#a7f3d0' : '#fde68a',
+                            border: `1px solid ${computationSource === 'FASTAPI' ? 'rgba(16, 185, 129, 0.2)' : 'rgba(245, 158, 11, 0.2)'}`
+                        }}>
+                            {computationSource === 'FASTAPI' ? (
+                                <span>✅ <strong>Source:</strong> Response received via <code>POST https://ai-model-backend-t1u5.onrender.com/predict/spam</code> executing <code>spam_ham_model.pkl</code> + <code>tfidf_vectorizer.pkl</code>.</span>
+                            ) : (
+                                <span>⚠️ <strong>Backend Offline:</strong> Render API at <code>https://ai-model-backend-t1u5.onrender.com</code> unreachable. Using local client fallback.</span>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Class Confidence Progress Bars */}
+                    <div style={{ marginBottom: '20px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '4px' }}>
+                            <span>Spam Probability</span>
+                            <strong style={{ color: 'var(--spam-red)' }}>{(spamProb * 100).toFixed(1)}%</strong>
+                        </div>
+                        <div style={{ background: '#1e293b', height: '8px', borderRadius: '4px', overflow: 'hidden', marginBottom: '12px' }}>
+                            <div style={{ width: `${(spamProb * 100).toFixed(1)}%`, height: '100%', background: 'var(--spam-red)', transition: 'width 0.4s ease' }}></div>
+                        </div>
+
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '4px' }}>
+                            <span>Legitimate (Ham) Probability</span>
+                            <strong style={{ color: 'var(--ham-green)' }}>{(hamProb * 100).toFixed(1)}%</strong>
+                        </div>
+                        <div style={{ background: '#1e293b', height: '8px', borderRadius: '4px', overflow: 'hidden' }}>
+                            <div style={{ width: `${(hamProb * 100).toFixed(1)}%`, height: '100%', background: 'var(--ham-green)', transition: 'width 0.4s ease' }}></div>
+                        </div>
+                    </div>
+
+                    {/* Detected Trigger Words */}
+                    {detected.length > 0 && (
+                        <div style={{ background: 'rgba(11, 17, 28, 0.6)', padding: '16px', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
+                            <h4 style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '8px' }}>
+                                ⚠️ Detected Spam Trigger Patterns
+                            </h4>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                                {detected.map(w => (
+                                    <span key={w} style={{ background: 'rgba(239, 68, 68, 0.2)', color: '#fca5a5', border: '1px solid rgba(239, 68, 68, 0.4)', padding: '3px 10px', borderRadius: '14px', fontSize: '0.78rem', fontWeight: 600 }}>
+                                        {w}
+                                    </span>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+}
+
+// ----------------------------------------------------------------------------
+// 2. Analytics Tab (Chart.js Spam Dataset Breakdown)
+// ----------------------------------------------------------------------------
+function AnalyticsTab() {
+    const chartRef = useRef(null);
+    const chartInstance = useRef(null);
+
+    useEffect(() => {
+        if (!chartRef.current) return;
+        const ctx = chartRef.current.getContext('2d');
+        if (chartInstance.current) chartInstance.current.destroy();
+
+        chartInstance.current = new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: ['Legitimate (Ham) Messages', 'Spam / Phishing Messages'],
+                datasets: [{
+                    data: [4825, 747],
+                    backgroundColor: ['rgba(16, 185, 129, 0.8)', 'rgba(239, 68, 68, 0.8)'],
+                    borderColor: ['#10b981', '#ef4444'],
+                    borderWidth: 2
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { labels: { color: '#94a3b8', font: { size: 14 } } }
+                }
+            }
+        });
+
+        return () => { if (chartInstance.current) chartInstance.current.destroy(); };
+    }, []);
+
+    return (
+        <div>
+            <div className="grid-4" style={{ marginBottom: '24px' }}>
+                <div className="stat-card">
+                    <div className="stat-label">Total Messages</div>
+                    <div className="stat-value">5,572</div>
+                </div>
+                <div className="stat-card">
+                    <div className="stat-label">Ham Ratio</div>
+                    <div className="stat-value" style={{ color: 'var(--ham-green)' }}>86.6%</div>
+                </div>
+                <div className="stat-card">
+                    <div className="stat-label">Spam Ratio</div>
+                    <div className="stat-value" style={{ color: 'var(--spam-red)' }}>13.4%</div>
+                </div>
+                <div className="stat-card">
+                    <div className="stat-label">Test Accuracy</div>
+                    <div className="stat-value" style={{ color: 'var(--primary)' }}>96.7%</div>
+                </div>
+            </div>
+
+            <div className="glass-card">
+                <h3 className="card-title">📊 Spam vs Ham Class Distribution in Dataset</h3>
+                <div style={{ height: '320px', position: 'relative' }}>
+                    <canvas ref={chartRef}></canvas>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+// ----------------------------------------------------------------------------
+// 3. Model Specs Tab
+// ----------------------------------------------------------------------------
+function ModelSpecsTab() {
+    return (
+        <div>
+            <div className="grid-4" style={{ marginBottom: '24px' }}>
+                <div className="stat-card">
+                    <div className="stat-label">ML Model</div>
+                    <div className="stat-value" style={{ fontSize: '1.2rem' }}>Logistic Regression</div>
+                </div>
+                <div className="stat-card">
+                    <div className="stat-label">Text Extractor</div>
+                    <div className="stat-value" style={{ color: 'var(--primary)', fontSize: '1.2rem' }}>TF-IDF Vectorizer</div>
+                </div>
+                <div className="stat-card">
+                    <div className="stat-label">Saved Files</div>
+                    <div className="stat-value" style={{ color: 'var(--secondary)', fontSize: '1.1rem' }}>2 Pickle Files</div>
+                </div>
+                <div className="stat-card">
+                    <div className="stat-label">Stop Words</div>
+                    <div className="stat-value" style={{ fontSize: '1.1rem' }}>English Filter</div>
+                </div>
+            </div>
+
+            <div className="glass-card">
+                <h3 className="card-title">🔬 NLP Feature Extraction & Model Specs</h3>
+                <p style={{ color: 'var(--text-muted)', lineHeight: '1.6', fontSize: '0.92rem' }}>
+                    This model converts raw email text into numerical feature vectors using <strong>TfidfVectorizer</strong> (`tfidf_vectorizer.pkl`), 
+                    removing common English stop words and converting characters to lowercase. A <strong>Logistic Regression model</strong> (`spam_ham_model.pkl`) 
+                    then predicts binary class membership (`0` for Spam, `1` for Ham) with 96.7% test accuracy.
+                </p>
+            </div>
+        </div>
+    );
+}
+
+// ----------------------------------------------------------------------------
+// 4. API Guide Tab
+// ----------------------------------------------------------------------------
+function ApiTab() {
+    return (
+        <div className="glass-card">
+            <h3 className="card-title">🔌 FastAPI Implementation (main.py)</h3>
+            <pre className="code-box">
+{`from fastapi import FastAPI
+from pydantic import BaseModel, Field
+import pickle
+
+with open("spam_ham_model.pkl", "rb") as f:
+    model = pickle.load(f)
+
+with open("tfidf_vectorizer.pkl", "rb") as f:
+    vectorizer = pickle.load(f)
+
+app = FastAPI()
+
+class EmailInput(BaseModel):
+    text: str
+
+@app.post("/predict")
+def predict(data: EmailInput):
+    features = vectorizer.transform([data.text])
+    pred = model.predict(features)[0]
+    proba = model.predict_proba(features)[0]
+    return {
+        "label": "Spam" if pred == 0 else "Ham",
+        "is_spam": bool(pred == 0),
+        "confidence": float(max(proba)),
+        "spam_probability": float(proba[0]),
+        "ham_probability": float(proba[1])
+    }`}
+            </pre>
+        </div>
+    );
+}
+
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(<App />);
+    </script>
+</body>
+</html>
