@@ -38,6 +38,7 @@ def home():
     return {"message": "Email Spam/Ham Classifier API is live!"}
 
 @app.post("/predict", response_model=PredictionResponse)
+@app.post("/predict/spam", response_model=PredictionResponse)
 def predict_spam(data: EmailInput):
     # Vectorize input text using trained TF-IDF
     features = vectorizer.transform([data.text])

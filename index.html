@@ -151,9 +151,27 @@ function PredictorTab() {
                 const data = await res.json();
                 setIsSpam(data.is_spam);
                 setLabel(data.label);
-                setConfidence(data.confidence);
-                setSpamProb(data.spam_probability);
-                setHamProb(data.ham_probability);
+                
+                // Handle different confidence formats (ratio vs percentage)
+                let conf = data.confidence;
+                if (conf > 1) {
+                    conf = conf / 100;
+                }
+                setConfidence(conf);
+                
+                // Handle missing/undefined probability fields from external API responses
+                let sProb = data.spam_probability;
+                let hProb = data.ham_probability;
+                if (sProb === undefined || hProb === undefined) {
+                    sProb = data.is_spam ? conf : 1 - conf;
+                    hProb = data.is_spam ? 1 - conf : conf;
+                } else {
+                    if (sProb > 1) sProb = sProb / 100;
+                    if (hProb > 1) hProb = hProb / 100;
+                }
+                setSpamProb(sProb);
+                setHamProb(hProb);
+                
                 setComputationSource('FASTAPI');
             } else {
                 throw new Error('API Non-200');
